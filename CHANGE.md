@@ -10,6 +10,8 @@ Twinkle 在 **Moore Threads MUSA** 环境下的变更记录。
 
 ## 0. 环境基线（修改所依据）
 
+改动开始时的本机 MUSA 栈快照；后续变更 1～10 在此基础上逐步调整，**当前最终版本见 §0.1**。
+
 | 组件 | 版本 | 备注 |
 |------|------|------|
 | Python | 3.10.12 | |
@@ -18,6 +20,33 @@ Twinkle 在 **Moore Threads MUSA** 环境下的变更记录。
 | accelerate | 1.12.0 | 已识别 MUSA |
 | transformers | 4.50.2 | |
 | numpy / scipy | 1.26.0 / 1.10.1 | 不可强升到 numpy 2.x |
+| 硬件 | 8× MTT S5000 | |
+
+---
+
+## 0.1 当前环境快照（与 `pyproject.toml` / 本机实测对齐）
+
+截至变更 10 完成后的**当前** pin；与 §0 差异即各变更条目所致。
+
+| 组件 | 版本 | 备注 |
+|------|------|------|
+| Python | 3.10.12 | |
+| torch / torch_musa | 2.7.1 / 2.7.1+1569808 | `torch.musa.is_available() == True` |
+| torchvision | 0.22.1+6b25dcc | MUSA 配套 |
+| accelerate | 1.12.0 | 已识别 MUSA |
+| transformers | 5.2.0 | 支持 `qwen3_5`（变更 10） |
+| tokenizers | 0.22.2 | transformers 5.x 配套 |
+| huggingface-hub | 1.23.0 | transformers 5.x 配套 |
+| numpy / scipy | 1.26.4 / 1.10.1 | 不可强升到 numpy 2.x |
+| datasets | 3.0.0 | |
+| omegaconf | 2.3.1 | |
+| fastapi | 0.136.1 | |
+| modelscope | 1.38.0 | |
+| safetensors | 0.7.0 | |
+| peft | 0.18.0 | 避开 MT-TE（勿升 0.19） |
+| ray | 2.54.0 | vllm-musa 要求；连带 pydantic 2.13.4 |
+| pydantic | 2.13.4 | Ray 传递依赖，未 pin |
+| tinker | 0.14.0 | 已适配 Python 3.10 |
 | 硬件 | 8× MTT S5000 | |
 
 ---
@@ -58,22 +87,22 @@ ray = ["ray[serve]"]
 
 路径：`pyproject.toml`
 
-| 字段 | 修改后 |
+| 字段 | 修改后（含变更 10 同步后的最终 pin） |
 |------|--------|
 | `requires-python` | `>=3.10,<3.13` |
-| `numpy` | `==1.26.0` |
+| `numpy` | `==1.26.4` |
 | `scipy` | `==1.10.1`（新增） |
-| `datasets` | `==4.4.2` |
-| `omegaconf` | `==2.3.0` |
-| `fastapi` | `==0.116.1` |
-| `modelscope[framework]` | `==1.36.3` |
-| `safetensors` | `==0.6.2` |
-| `transformers` | `==4.50.2` |
+| `datasets` | `==3.0.0` |
+| `omegaconf` | `==2.3.1` |
+| `fastapi` | `==0.136.1` |
+| `modelscope[framework]` | `==1.38.0` |
+| `safetensors` | `==0.7.0` |
+| `transformers` | `==5.2.0` |
 | `peft` | `==0.18.0` |
 | `accelerate` | `==1.12.0` |
 | `torch` | `==2.7.1` |
 | `torchvision` | `==0.22.1` |
-| `ray` | `ray[serve]==2.55.1` |
+| `ray` | `ray[serve]==2.54.0` |
 
 说明：`torch_musa`、`pydantic` 不写入主 pin（官方栈 / Ray 传递依赖）。
 
@@ -98,13 +127,13 @@ ray = ["ray[serve]"]
 执行：
 
 ```bash
-pip install 'peft==0.18.0' 'ray[serve]==2.55.1'
+pip install 'peft==0.18.0' 'ray[serve]==2.54.0'
 ```
 
 | 项 | 结果 |
 |----|------|
 | peft | `0.18.0`（已装；但受 TE 影响，当前 **import 仍可能失败**，见「已知问题」） |
-| ray | `2.55.1` |
+| ray | `2.54.0` |
 | torch / torch_musa / numpy / scipy | **未变** |
 | pydantic | `2.11.7` → `2.13.4`（Ray Serve 排除 2.10/2.11，连带升级；对 torch_musa 无影响） |
 
@@ -332,12 +361,12 @@ MUSA_VISIBLE_DEVICES="" ray start --address=127.0.0.1:6379 --num-gpus=0 \
 ### 修改后
 
 ```bash
-pip install 'peft==0.18.1'
+pip install 'peft==0.18.0'
 ```
 
-- peft：`0.18.1`，`from peft import LoraConfig` 正常  
+- peft：`0.18.0`，`from peft import LoraConfig` 正常  
 - TE 仍保留在环境中（本路径 HF+LoRA 不使用）  
-- 注：`pyproject.toml` 若仍写 `peft==0.19.0`，与环境不一致时可再改 pin
+- 注：本机最终为 `0.18.0`（`0.18.x` 均可绕开 TE；`pyproject.toml` 已 pin `peft==0.18.0`）
 
 ---
 
@@ -345,7 +374,7 @@ pip install 'peft==0.18.1'
 
 | 项 | 状态 |
 |----|------|
-| peft × TE | 已用 peft 0.18.1 **绕开**；TE 本体仍坏，Megatron/FP8 以后再处理 |
+| peft × TE | 已用 peft 0.18.0 **绕开**；TE 本体仍坏，Megatron/FP8 以后再处理 |
 | 起 Server | 需用加固后的 `run.sh` 重试；若仍顶 PID，提高 Docker `--pids-limit` 或 `RAY_NUM_CPUS=4` |
 | 跑 `self_cognition.py` | Server `:8000` 正常后再跑 |
 
@@ -466,7 +495,7 @@ ValueError: The checkpoint ... has model type `qwen3_5` but Transformers does no
 | hf-xet | 1.1.9 | **1.5.1** |
 | click | 8.2.1 | **8.4.2** |
 | typer / typer-slim / shellingham / annotated-doc | 无 | 新装（CLI 用，训练路径不依赖） |
-| torch / torch_musa / peft / accelerate / numpy / safetensors | 2.7.1 / 0.18.1 / 1.12.0 / 1.26.0 / 0.6.2 | **未变** |
+| torch / torch_musa / peft / accelerate / numpy / safetensors | 2.7.1 / 0.18.0 / 1.12.0 / 1.26.4 / 0.7.0 | **未变** |
 
 安装命令：
 
@@ -474,7 +503,7 @@ ValueError: The checkpoint ... has model type `qwen3_5` but Transformers does no
 pip install 'transformers==5.2.0' --upgrade-strategy only-if-needed
 ```
 
-`pyproject.toml` 同步：`transformers==5.2.0`，`peft==0.18.1`。
+`pyproject.toml` 同步：`transformers==5.2.0`，`peft==0.18.0`，其余 pin 见变更 1 表。
 
 ### 验证结果
 
@@ -488,7 +517,7 @@ pip install 'transformers==5.2.0' --upgrade-strategy only-if-needed
 ### 说明
 
 - pip 会提示 `twinkle-kit` 元数据与旧 pin 冲突；已用上述 `pyproject.toml` 对齐消除后续警告（需重新 `pip install -e . --no-deps` 才会刷新已安装元数据）。
-- 保持 peft **0.18.1**（避免再升到 0.19 触发 MT-TE 问题）。
+- 保持 peft **0.18.0**（避免再升到 0.19 触发 MT-TE 问题）。
 
 ---
 
@@ -497,7 +526,7 @@ pip install 'transformers==5.2.0' --upgrade-strategy only-if-needed
 | 阶段 | 状态 |
 |------|------|
 | pyproject 对齐 | 已完成（含变更 10 的 transformers pin） |
-| peft / ray 安装 | 已完成；peft 已降至 **0.18.1** |
+| peft / ray 安装 | 已完成；peft **0.18.0**，ray **2.54.0** |
 | MUSA Platform | 已完成 |
 | server_config / run.sh（MUSA） | 已完成 |
 | `pip install -e . --no-deps` | 已完成 |
