@@ -368,51 +368,7 @@ Platform 完成后已继续完成 **server_config.yaml / run.sh**（见第 12 �
 
 ---
 
-## 11. 回滚
-
-### 11.1 回滚 `pyproject.toml`
-
-```bash
-# 若有备份
-cp /data/wangmx/twinkle/pyproject.toml.bak.pre_musa /data/wangmx/twinkle/pyproject.toml
-
-# 或用 git
-cd /data/wangmx/twinkle && git checkout -- pyproject.toml
-```
-
-回滚 pyproject 后：
-
-```bash
-pip install -e . --no-deps
-# 已装的 peft / ray / 新版 pydantic 需自行决定是否卸载或降级
-# pip uninstall peft ray
-# pip install 'pydantic==2.11.7'   # 仅在确认需要回退时
-```
-
-### 11.2 回滚 MUSA Platform 代码
-
-```bash
-cd /data/wangmx/twinkle
-# 删除新增文件
-rm -f src/twinkle/utils/platforms/musa.py
-# 恢复被改文件
-git checkout -- \
-  src/twinkle/utils/platforms/base.py \
-  src/twinkle/utils/platforms/__init__.py \
-  src/twinkle/utils/__init__.py
-```
-
-### 11.3 回滚 cookbook（恢复 CUDA 原版）
-
-```bash
-cd /data/wangmx/twinkle/cookbook/client/server/transformer
-cp server_config.yaml.cuda.bak server_config.yaml
-cp run.sh.cuda.bak run.sh
-```
-
----
-
-## 12. cookbook：`server_config.yaml` / `run.sh`（已改写）
+## 11. cookbook：`server_config.yaml` / `run.sh`（已改写）
 
 目录：`/data/wangmx/twinkle/cookbook/client/server/transformer/`
 
@@ -423,7 +379,7 @@ cp run.sh.cuda.bak run.sh
 | `server_config.yaml.cuda.bak` | CUDA 原版备份 |
 | `run.sh.cuda.bak` | CUDA 原版备份 |
 
-### 12.1 `server_config.yaml` 修改要点
+### 11.1 `server_config.yaml` 修改要点
 
 | 项 | 修改前（CUDA） | 修改后（MUSA） |
 |----|----------------|----------------|
@@ -436,7 +392,7 @@ cp run.sh.cuda.bak run.sh
 | processor | `CPU` | `CPU`（不变） |
 | `supported_models` / route | `Qwen/Qwen3.5-4B` | 不变（需与客户端 `base_model` 一致） |
 
-### 12.2 `run.sh` 修改要点
+### 11.2 `run.sh` 修改要点
 
 | 项 | 修改前（CUDA） | 修改后（MUSA） |
 |----|----------------|----------------|
@@ -456,54 +412,3 @@ bash run.sh
 多卡示例已写在 `run.sh` 注释中；启用时需同步加大 yaml 里的 `ranks` / `nproc_per_node` / `MUSA` 数量。
 
 ---
-
-## 13. `pip install -e . --no-deps` 对本地环境的影响分析（未执行）
-
-> 本节只分析，**尚未在本机执行该命令**。
-
-### 13.1 这条命令实际做什么
-
-```bash
-cd /data/wangmx/twinkle
-pip install -e . --no-deps
-```
-
-| 行为 | 说明 |
-|------|------|
-| `-e`（editable） | 在 site-packages 里注册 `twinkle-kit` 指向源码目录，改代码即时生效，**不复制**整份包到 site-packages |
-| `--no-deps` | **不解析、不安装、不升级** 任何依赖（含 torch / numpy / peft / ray 等） |
-| dry-run 结果 | `Would install twinkle-kit-0.3.0`（仅此一项） |
-
-典型落地文件（执行后会出现，大致如下）：
-
-- `/usr/local/lib/python3.10/dist-packages/twinkle_kit-0.3.0.dist-info/`（元数据）
-- `/usr/local/lib/python3.10/dist-packages/__editable__.twinkle_kit-0.3.0.pth` 或同类 editable 钩子  
-  → 内容指向 `/data/wangmx/twinkle/src`（或项目根），使 `import twinkle` 可用
-
-### 13.2 会不会影响 `torch_musa` / 已装依赖？
-
-| 风险点 | 结论 |
-|--------|------|
-| 覆盖 / 重装 `torch`、`torch_musa` | **不会**（`--no-deps`） |
-| 升级 `numpy` / `scipy` / `pydantic` | **不会** |
-| 动 peft / ray / accelerate | **不会** |
-| 改 MUSA 驱动 / 工具链 | **不会** |
-| 占用磁盘 | 极小（几个元数据文件 + pth） |
-
-### 13.3 会改变什么（需要知情）
-
-1. **当前这个 Python**（`/usr/bin/python` / 系统 site-packages）里，`import twinkle` / `import twinkle_client` 会变为可用（现在不加 `PYTHONPATH` 会失败）。
-2. 若以后再对同一环境执行 **不带** `--no-deps` 的 `pip install -e .` 或 `pip install -e '.[transformers,ray]'`，才可能牵动依赖——那是另一次操作的风险，不是本次。
-3. 卸载方式：`pip uninstall twinkle-kit`（不会卸载 torch_musa）。
-4. 构建阶段可能短暂拉 **build 依赖**（setuptools/wheel，用于生成 editable metadata）；dry-run 已显示会走 build backend，一般不碰 torch。若极端网络策略禁止任何下载，可改用：`PYTHONPATH=/data/wangmx/twinkle/src` 临时代替安装。
-
-### 13.4 建议
-
-- **可以执行**：对保护 MUSA 栈是安全的，且起 Server / 跑客户端都需要能 `import twinkle`。
-- **执行后立刻自检：**
-
-```bash
-python -c "import twinkle, torch, torch_musa; print(twinkle.__file__); print(torch.__version__, torch.musa.is_available())"
-```
-
-预期：`twinkle` 来自 `/data/wangmx/twinkle/src/...`，`torch` 仍为 `2.7.1`，`musa` 为 `True`。
