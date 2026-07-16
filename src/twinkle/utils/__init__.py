@@ -8,7 +8,8 @@ from .loader import Plugin, construct_class
 from .logger import get_logger
 from .network import find_free_port, find_node_ip, is_valid_ipv6_address
 from .parallel import processing_lock
-from .platforms import GPU, NPU, Platform, ensure_hccl_socket_env, ensure_npu_backend
+from .platforms import (GPU, MUSA, NPU, Platform, ensure_hccl_socket_env, ensure_musa_backend, ensure_npu_backend,
+                        is_musa_available)
 from .safetensors import LazyTensor, SafetensorLazyLoader, StreamingSafetensorSaver
 from .torch_utils import (pad_and_stack_tensors, pad_sequence_to_length, selective_log_softmax, split_cp_inputs,
                           stateless_init_process_group, to_device)

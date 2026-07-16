@@ -17,16 +17,22 @@ class Platform(ABC):
 
     @staticmethod
     def get_platform_names() -> List[str]:
-        return ['GPU', 'NPU', 'MPS']
+        return ['GPU', 'NPU', 'MUSA', 'MPS']
 
     @staticmethod
     def get_platform(platform: str = None) -> Type['Platform']:
         if platform is None:
             from .mps import is_mps_available
+            from .musa import is_musa_available
             if shutil.which('npu-smi'):
                 from .npu import NPU, ensure_npu_backend
                 ensure_npu_backend()
                 return NPU
+            elif is_musa_available():
+                # Prefer MUSA over CUDA when Moore Threads toolkit / torch_musa is present.
+                from .musa import MUSA, ensure_musa_backend
+                ensure_musa_backend()
+                return MUSA
             elif shutil.which('nvidia-smi'):
                 from .gpu import GPU
                 return GPU
@@ -43,6 +49,10 @@ class Platform(ABC):
             from .npu import NPU, ensure_npu_backend
             ensure_npu_backend()
             return NPU
+        elif platform.upper() in ('MUSA',):
+            from .musa import MUSA, ensure_musa_backend
+            ensure_musa_backend()
+            return MUSA
         elif platform.upper() == 'MPS':
             from .mps import MPS
             return MPS

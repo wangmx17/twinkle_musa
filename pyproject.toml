@@ -4,28 +4,35 @@ version = "0.3.0"
 description = "Training API for large language models with efficient data handling and advanced optimization techniques."
 readme = "README.md"
 authors = [{ name = "ModelScope", email = "contact@modelscope.cn" }]
-requires-python = ">=3.11,<3.13"
+# 本机 MUSA 环境：Python 3.10.12
+requires-python = ">=3.10,<3.13"
 dependencies = [
-  "numpy>=2.0.0,<2.3.0",
-  "datasets",
-  "omegaconf>=2.3.0,<3.0.0",
-  "fastapi",
-  "modelscope[framework]>=1.34.0",
-  "safetensors",
-  "peft>=0.11.0,<=0.19.0",
-  "transformers",
+  # 以下版本对齐当前 MUSA 环境实测值，避免 pip 升级破坏 torch_musa
+  "numpy==1.26.4",
+  "scipy==1.10.1",
+  "datasets==3.0.0",
+  "omegaconf==2.3.1",
+  "fastapi==0.136.1",
+  "modelscope[framework]==1.38.0",
+  "safetensors==0.7.0",
+  "transformers==5.2.0",
+  "peft==0.18.0",
 ]
 
 [project.optional-dependencies]
 transformers = [
-  "accelerate",
-  "torch>=2.6.0,<3.0.0",
-  "torchvision",
+  "accelerate==1.12.0",
+  # torch / torchvision 由 MUSA 官方栈提供（torch==2.7.1, torch_musa==2.7.1）
+  # 这里仅声明兼容范围，安装时务必 --no-deps 或勿覆盖已有 torch
+  "torch==2.7.1",
+  "torchvision==0.22.1",
 ]
 kernels = ["kernels"]
 megatron = ["megatron-core>=0.12.0", "transformer-engine[pytorch]", "mcore_bridge"]
-vllm = ["vllm>=0.11"]
-ray = ["ray[serve]"]
+# 环境实测：vllm==0.10.1.2.dev0+g1da94e673.d20260703.empty，另有 vllm_musa
+vllm = ["vllm>=0.10.1"]
+# 已安装 ray[serve]==2.54.0（vllm-musa 要求；连带 pyarrow==20.0.0, pydantic==2.13.4）
+ray = ["ray[serve]==2.54.0"]
 tinker = ["tinker==0.14.0"]
 docs = [
   "sphinx>=5.3.0,<6.0.0",

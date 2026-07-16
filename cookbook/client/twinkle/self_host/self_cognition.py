@@ -10,6 +10,7 @@ import dotenv
 dotenv.load_dotenv('.env')
 
 import os
+from datetime import datetime
 from peft import LoraConfig
 
 from twinkle import get_logger
@@ -19,9 +20,18 @@ from twinkle.dataloader import DataLoader
 from twinkle.dataset import Dataset
 from twinkle_client.model import MultiLoraTransformersModel
 
-logger = get_logger()
+# Save console + training logs to a timestamped file under ./logs/
+_log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(_log_dir, exist_ok=True)
+_log_file = os.path.join(_log_dir, f'self_cognition_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+logger = get_logger(log_file=_log_file, file_mode='a')
+logger.info(f'Logging to {_log_file}')
 
+# Logical name must match server route_prefix: /api/v1/model/Qwen/Qwen3.5-4B
 base_model = 'Qwen/Qwen3.5-4B'
+# Local assets (avoid ModelScope download / missing extras like addict)
+local_model = '/data/wangmx/Qwen3.5-4B'
+local_dataset = '/data/wangmx/self-cognition/self_cognition.jsonl'
 base_url = 'http://localhost:8000'
 api_key = 'EMPTY_API_KEY'
 
@@ -32,9 +42,9 @@ api_key = 'EMPTY_API_KEY'
 client = init_twinkle_client(base_url=base_url, api_key=api_key)
 
 # List available models of the server
-print('Available models:')
+logger.info('Available models:')
 for item in client.get_server_capabilities().supported_models:
-    print('- ' + item.model_name)
+    logger.info('- ' + item.model_name)
 
 # Step 3: Query the server for existing training runs and their checkpoints.
 # This is useful for resuming a previous training session.
@@ -55,11 +65,11 @@ for run in runs:
 def train():
     # Step 4: Prepare the dataset
 
-    # Load the self-cognition dataset from ModelScope
-    dataset = Dataset(dataset_meta=DatasetMeta('ms://swift/self-cognition', data_slice=range(500)))
+    # Load the self-cognition dataset from local jsonl (not a directory)
+    dataset = Dataset(dataset_meta=DatasetMeta(local_dataset, data_slice=range(500)))
 
-    # Apply a chat template so the data matches the model's expected input format
-    dataset.set_template('Qwen3_5Template', model_id=f'ms://{base_model}', max_length=512)
+    # Apply a chat template; tokenizer from local model dir
+    dataset.set_template('Qwen3_5Template', model_id=local_model, max_length=512)
 
     # Replace placeholder names in the dataset with custom model/author names
     dataset.map('SelfCognitionProcessor', init_args={'model_name': 'twinkle模型', 'model_author': 'ModelScope社区'})
@@ -72,8 +82,9 @@ def train():
 
     # Step 5: Configure the model
 
-    # Create a multi-LoRA Transformers model pointing to the base model on ModelScope
-    model = MultiLoraTransformersModel(model_id=f'ms://{base_model}')
+    # Client model_id is the server route key (not a filesystem path).
+    # Server already loads weights from local_model (see server_config.yaml).
+    model = MultiLoraTransformersModel(model_id=base_model)
 
     # Define LoRA configuration: apply low-rank adapters to all linear layers
     lora_config = LoraConfig(target_modules='all-linear')
@@ -83,8 +94,8 @@ def train():
     # before an optimizer step, effectively doubling the batch size.
     model.add_adapter_to_model('default', lora_config, gradient_accumulation_steps=2)
 
-    # Set the same chat template used during data preprocessing
-    model.set_template('Qwen3_5Template')
+    # Set the same chat template; pass local_model so server does not hit ModelScope
+    model.set_template('Qwen3_5Template', model_id=local_model)
 
     # Set the input processor (pads sequences on the right side)
     model.set_processor('InputProcessor', padding_side='right')

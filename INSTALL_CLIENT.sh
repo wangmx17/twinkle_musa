@@ -23,7 +23,7 @@ set -e  # Exit immediately on error
 
 # Configuration
 ENV_NAME="${1:-twinkle-client}"
-PYTHON_VERSION="3.11"
+PYTHON_VERSION="3.10"
 MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest"
 
 echo "=========================================="
